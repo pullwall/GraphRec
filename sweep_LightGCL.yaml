@@ -1,0 +1,18 @@
+program: main.py
+method: grid
+metric:
+  name: Eval/Recall@20
+  goal: maximize
+parameters:
+  model:
+    value: LightGCL
+  dataset:
+    value: gowalla
+  ssl_reg:
+    values: [0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
+  ssl_temp:
+    value: 0.2
+  reg_weight:
+    value: 1e-7
+  ssl_ratio:
+    values: [0.0, 0.25]

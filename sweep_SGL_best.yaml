@@ -1,0 +1,18 @@
+program: main.py
+method: grid
+metric:
+  name: Eval/Recall@20
+  goal: maximize
+parameters:
+  model:
+    value: SGL
+  dataset:
+    value: gowalla
+  epoch:
+    value: 100
+  ssl_reg:
+    value: 0.05
+  ssl_temp:
+    value: 0.2
+  ssl_ratio:
+    value: 0.5

@@ -1,0 +1,18 @@
+program: main.py
+method: grid
+metric:
+  name: Eval/Recall@20
+  goal: maximize
+parameters:
+  model:
+    value: SimGCL
+  dataset:
+    value: yelp2018
+  epoch:
+    value: 100
+  ssl_reg:
+    value: 0.5
+  ssl_temp:
+    value: 0.2
+  eps:
+    value: 0.05

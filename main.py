@@ -3,10 +3,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import importlib
 import wandb
-
 from config import get_config
 from utils import set_seed
-from data import RecDataset, BatchDataLoader
+from data import RecDataset
+
 
 torch.cuda.set_device(1)
 
@@ -41,11 +41,7 @@ def main():
         name=f"{config['model']}_{config['dataset']}_reg{config['ssl_reg']}_temp{config['ssl_temp']}_ratio{config['ssl_ratio']}",
     )
     
-    dataset = RecDataset(config['dataset'])
-    
-    train_data = BatchDataLoader(dataset.train)
-    train_loader = DataLoader(train_data, batch_size=config['batch_size'], shuffle=True)
-    
+    dataset = RecDataset(config['dataset'])    
     model = get_model(config['model'], config, dataset)
     device = dataset.device
     model.to(device)
@@ -60,8 +56,9 @@ def main():
     
     # Train
     for epoch in tqdm(range(1, config['epochs'] + 1)):
-        train_log_info = train_model(model, optimizer, device, train_loader)
-        if epoch % 10 == 0:
+        train_log_info = train_model(model, optimizer, device, dataset, epoch)
+        print(f"Epoch {epoch}: {train_log_info}")
+        if epoch % 5 == 0:
             eval_log_info = evaluate_metrics(model, device, dataset, config)
             print(f"Epoch {epoch}: {eval_log_info}")
             wandb.log({
@@ -69,7 +66,7 @@ def main():
                 "Eval/NDCG@20": eval_log_info["NDCG@20"],
             },step=epoch)
             
-            if eval_log_info['Recall@20'] >= best_recall and eval_log_info['NDCG@20'] >= best_ndcg:
+            if eval_log_info['Recall@20'] >= best_recall:
                 best_recall = eval_log_info['Recall@20']
                 best_ndcg = eval_log_info['NDCG@20']
                 best_epoch = epoch

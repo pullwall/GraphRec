@@ -1,7 +1,7 @@
 program: main.py
 method: grid
 metric:
-  name: Eval/Recall@20
+  name: Best/Recall@20
   goal: maximize
 parameters:
   model:

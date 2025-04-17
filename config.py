@@ -89,6 +89,8 @@ def get_config():
     # 공통 인자
     parser.add_argument('--dataset', type=str, default='gowalla', help="Dataset name")
     parser.add_argument('--model', type=str, default='bpr', help="Model type (e.g., 'bpr', 'lightgcn')")
+    parser.add_argument('--device', type=int, default=1, help="GPU")
+    parser.add_argument('--top_k', type=int, nargs='+', default=[20], help="@K for evaluate")
     # model별 인자
     parser.add_argument('--epochs', type=int, default=None, help="Number of epochs")
     parser.add_argument('--lr', type=float, default=None, help="Learning rate")
@@ -101,7 +103,7 @@ def get_config():
     parser.add_argument('--ssl_reg', type=float, default=None, help="Regularization of SSL loss (lambda_1)")
     parser.add_argument('--ssl_temp', type=float, default=None, help="Temperature for InfoNCE loss (tau)")
     parser.add_argument('--ssl_ratio', type=float, default=None, help="Node dropout ratio (rho)")
-    parser.add_argument('--aug_type', type=float, default=None, help="Graph agmentation type")
+    parser.add_argument('--aug_type', type=str, default=None, help="Graph agmentation type")
     
     parser.add_argument('--eps', type=float, default=None, help="Epsilon of SimGCL")
     
@@ -119,6 +121,8 @@ def get_config():
     args = parser.parse_args()
     model = args.model
     defaults = DEFAULTS.get(model, {})
+    if args.device is None:
+        args.device = defaults.get('device', 1)
     if args.epochs is None:
         args.epochs = defaults.get('epochs', 1000)
     if args.lr is None:
@@ -128,11 +132,11 @@ def get_config():
     if args.batch_user is None:
         args.batch_user = defaults.get('batch_user', 256)
     if args.seed is None:
-        args.seed = defaults.get('seed', 2020)
+        args.seed = defaults.get('seed', 2025)
     if args.embedding_dim is None:
         args.embedding_dim = defaults.get('embedding_dim', 64)
     if args.layers is None:
-        args.layers = defaults.get('layers', 0)
+        args.layers = defaults.get('layers', 3)
     if args.reg_weight is None:
         args.reg_weight = defaults.get('reg_weight', 1e-4)
     if args.ssl_reg is None:

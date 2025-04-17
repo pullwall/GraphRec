@@ -6,6 +6,7 @@ import wandb
 from config import get_config
 from utils import set_seed
 from data import RecDataset
+import time
 
 
 torch.cuda.set_device(1)
@@ -34,51 +35,78 @@ def get_trainer(model_name):
 def main():
     config = get_config()
     set_seed(config['seed'])
-    
+
     wandb.init(
         project=f"{config['model']}",
         config=config,
         name=f"{config['model']}_{config['dataset']}_reg{config['ssl_reg']}_temp{config['ssl_temp']}_ratio{config['ssl_ratio']}",
     )
-    
-    dataset = RecDataset(config['dataset'])    
+
+    dataset = RecDataset(config['dataset'])
     model = get_model(config['model'], config, dataset)
     device = dataset.device
     model.to(device)
-    
+
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
-    
+
     train_model, evaluate_metrics = get_trainer(config['model'])
 
+    # 초기 평가
     eval_log_info = evaluate_metrics(model, device, dataset, config)
-    best_epoch, best_recall, best_ndcg = 0, eval_log_info['Recall@20'], eval_log_info['NDCG@20']
     print("Initial evaluation:", eval_log_info)
-    
-    # Train
+    best_epoch = 0
+    best_recall = eval_log_info.get('Recall@20', 0.0)
+    best_ndcg = eval_log_info.get('NDCG@20', 0.0)
+
     for epoch in tqdm(range(1, config['epochs'] + 1)):
+        train_start= time.time()
         train_log_info = train_model(model, optimizer, device, dataset, epoch)
+        train_end = time.time()
         print(f"Epoch {epoch}: {train_log_info}")
-        if epoch % 5 == 0:
+        print(f"Train took {train_end-train_start:.2f} seconds")
+        
+
+        if epoch % 1 == 0:
+            eval_start = time.time()
             eval_log_info = evaluate_metrics(model, device, dataset, config)
+            eval_end = time.time()
             print(f"Epoch {epoch}: {eval_log_info}")
-            wandb.log({
-                "Eval/Recall@20": eval_log_info["Recall@20"],
-                "Eval/NDCG@20": eval_log_info["NDCG@20"],
-            },step=epoch)
-            
+            print(f"Evaluation took {eval_end - eval_start:.2f} seconds")
+
+            log_start = time.time()
+            wandb_log_dict = {
+                **{f"Eval/Recall@{k}": eval_log_info[f"Recall@{k}"] for k in config['top_k']},
+                **{f"Eval/NDCG@{k}": eval_log_info[f"NDCG@{k}"] for k in config['top_k']}
+            }
+            wandb.log(wandb_log_dict, step=epoch)
+
             if eval_log_info['Recall@20'] >= best_recall:
                 best_recall = eval_log_info['Recall@20']
                 best_ndcg = eval_log_info['NDCG@20']
                 best_epoch = epoch
-    
-    best_result = {"Best Epoch": best_epoch, "Best Recall@20": best_recall, "Best NDCG@20": best_ndcg}
-    print("Best result:", best_result)
+
+                wandb_best_log = {
+                    "Best/Recall@20": best_recall,
+                    "Best/NDCG@20": best_ndcg,
+                    "Best/Epoch": best_epoch
+                }
+                wandb.log(wandb_best_log, step=epoch)
+
+                wandb_snapshot_log = {
+                    **{f"Snapshot@Recall20/Recall@{k}": eval_log_info[f"Recall@{k}"] for k in config['top_k']},
+                    **{f"Snapshot@Recall20/NDCG@{k}": eval_log_info[f"NDCG@{k}"] for k in config['top_k']},
+                    "Snapshot@Recall20/BestEpoch": epoch
+                }
+                wandb.log(wandb_snapshot_log, step=epoch)
+            log_end = time.time()
+            print(f"Logging took {log_end - log_start:.2f} seconds")
+
+
+    print("Best result (Recall@20 기준):")
+    print(f"Epoch {best_epoch}: Recall@20 = {best_recall}, NDCG@20 = {best_ndcg}")
+
 
 if __name__ == '__main__':
     main()
     
 
-# trial#1 Best result: {'Best Epoch': 820, 'Best Recall@20': 0.1787, 'Best NDCG@20': 0.152} 
-# -> xavier initialization, python neg_sampling
-# trial#2 Best result: {'Best Epoch': 720, 'Best Recall@20': 0.1544, 'Best NDCG@20': 0.1301}
-# -> uniform initialization, cpp neg_sampling

@@ -1,25 +1,33 @@
 import torch
 import numpy as np
 import wandb
+from data import RecDataset, shuffle, minibatch
 
-def train_model(model, optimizer, device, train_loader):
-    train_loader.dataset.neg_sampling()
-    epoch_loss, epoch_bpr_loss, epoch_reg_loss, epoch_ssl_loss, epoch_layerl_loss = 0, 0, 0, 0, 0
-    for batch in train_loader:
-        uids, pos, neg = batch
-        uids = uids.to(device).long()
-        pos = pos.to(device).long()
-        neg = neg.to(device).long()
+def train_model(model, optimizer, device, dataset:RecDataset, epoch):
+    S = dataset.UniformSample_original_python()
+    uids = torch.from_numpy(S[:, 0]).long().to(device)
+    pos = torch.from_numpy(S[:, 1]).long().to(device)
+    neg = torch.from_numpy(S[:, 2]).long().to(device)
+
+    uids, pos, neg = shuffle(uids, pos, neg)
+
+    epoch_loss, epoch_bpr_loss, epoch_reg_loss = 0, 0, 0
+    epoch_ssl_loss, epoch_layerl_loss = 0, 0
+    num_batches = 0
+
+    for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg, batch_size=dataset.batch_size):
+        num_batches += 1
         optimizer.zero_grad()
-        total_loss, bpr_loss, reg_loss, ssl_loss, layerl_loss = model(uids, pos, neg)
+        total_loss, bpr_loss, reg_loss, ssl_loss, layerl_loss = model(batch_uids, batch_pos, batch_neg)
         total_loss.backward()
         optimizer.step()
-        epoch_loss += total_loss.cpu().item()
-        epoch_bpr_loss += bpr_loss.cpu().item()
-        epoch_reg_loss += reg_loss.cpu().item()
-        epoch_ssl_loss += ssl_loss.cpu().item()
-        epoch_layerl_loss += layerl_loss.cpu().item()
-    num_batches = len(train_loader)
+
+        epoch_loss += total_loss.item()
+        epoch_bpr_loss += bpr_loss.item()
+        epoch_reg_loss += reg_loss.item()
+        epoch_ssl_loss += ssl_loss.item()
+        epoch_layerl_loss += layerl_loss.item()
+
     log_info = {
         "Total Loss": epoch_loss / num_batches,
         "BPR Loss": epoch_bpr_loss / num_batches,
@@ -34,8 +42,9 @@ def train_model(model, optimizer, device, train_loader):
         "Train/SSL Loss": log_info["SSL Loss"],
         "Train/Layer Loss": log_info["Layer Loss"]
     }, step=epoch)
-    
+
     return log_info
+
 
 def predict(user_emb, item_emb, uids_batch, train_csr, device):
     preds = user_emb[uids_batch] @ item_emb.t()

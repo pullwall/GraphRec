@@ -54,7 +54,7 @@ DEFAULTS = {
     'LightGCL': {
         'epochs': 50,
         'lr': 1e-3,
-        'batch_size': 4096,
+        'batch_size': 2048,
         'batch_user': 256,
         'seed': 2025,
         'embedding_dim': 64,
@@ -68,7 +68,7 @@ DEFAULTS = {
     'AdaMCL': {
         'epochs': 300,
         'lr': 1e-3,
-        'batch_size': 4096,
+        'batch_size': 2048,
         'batch_user': 256,
         'seed': 2025,
         'embedding_dim': 64,
@@ -159,3 +159,6 @@ def get_config():
         args.gamma = defaults.get('gamma', 1)
 
     return vars(args)
+
+
+config = get_config()

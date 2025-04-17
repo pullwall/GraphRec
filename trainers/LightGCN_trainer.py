@@ -1,11 +1,14 @@
 import torch
 import numpy as np
 import wandb
+import time
 from data import RecDataset, shuffle, minibatch
 
 
 def train_model(model, optimizer, device, dataset:RecDataset, epoch):
+    start = time.time()
     S = dataset.UniformSample_original_python()
+    print(f"Neg sampling took {time.time() - start:.2f} seconds")
     uids = torch.Tensor(S[:, 0]).long().to(device)
     pos = torch.Tensor(S[:, 1]).long().to(device)
     neg = torch.Tensor(S[:, 2]).long().to(device)
@@ -40,7 +43,7 @@ def predict(user_emb, item_emb, uids_batch, train_csr, device):
     predictions = preds.argsort(descending=True, dim=1)
     return predictions.cpu().detach().numpy()
 
-def calculate_metrics(uids, predictions, top_k=20, test_labels=None):
+def calculate_metrics(uids, predictions, top_k, test_labels=None):
     user_num = 0
     all_recall = 0
     all_ndcg = 0
@@ -64,19 +67,37 @@ def calculate_metrics(uids, predictions, top_k=20, test_labels=None):
 
 def evaluate_metrics(model, device, dataset, config):
     batch_user = config['batch_user']
+    top_ks = config['top_k']
+    max_k = max(top_ks)
     uids_all = np.arange(dataset.num_users)
     n_batch_user = int(np.ceil(len(uids_all) / batch_user))
-    recall, ndcg = 0, 0
+    
+    recall_dict = {k: 0.0 for k in top_ks}
+    ndcg_dict = {k: 0.0 for k in top_ks}
+
     train_csr = dataset.train.tocsr()
     user_emb, item_emb = model.get_embeddings()
+
     for batch in range(n_batch_user):
         start = batch * batch_user
         end = min((batch + 1) * batch_user, len(uids_all))
         uids_batch = torch.LongTensor(uids_all[start:end]).to(device)
+
+        # 한 번만 full prediction 계산
         predictions = predict(user_emb, item_emb, uids_batch, train_csr, device)
-        recall_batch, ndcg_batch = calculate_metrics(uids_batch, predictions, top_k=20, test_labels=dataset.test_labels)
-        recall += recall_batch
-        ndcg += ndcg_batch
-    log_info = {"Recall@20": np.round(recall/n_batch_user, 4),
-                "NDCG@20": np.round(ndcg/n_batch_user, 4)}
+        predictions = predictions[:, :max_k]  # max_k까지만 사용
+
+        for k in top_ks:
+            sliced_preds = predictions[:, :k]  # 필요한 부분만 슬라이싱
+            recall_batch, ndcg_batch = calculate_metrics(
+                uids_batch, sliced_preds, top_k=k, test_labels=dataset.test_labels
+            )
+            recall_dict[k] += recall_batch
+            ndcg_dict[k] += ndcg_batch
+
+    log_info = {
+        **{f"Recall@{k}": np.round(recall_dict[k] / n_batch_user, 4) for k in top_ks},
+        **{f"NDCG@{k}": np.round(ndcg_dict[k] / n_batch_user, 4) for k in top_ks}
+    }
+
     return log_info

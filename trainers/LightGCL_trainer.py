@@ -1,21 +1,23 @@
 import torch
 import numpy as np
 import wandb
+from data import RecDataset, shuffle, minibatch
 
-def train_model(model, optimizer, device, train_loader):
-    # negative sampling 수행
-    train_loader.dataset.neg_sampling()
+def train_model(model, optimizer, device, dataset:RecDataset, epoch):
+    S = dataset.UniformSample_original_python()
+    uids = torch.from_numpy(S[:, 0]).long().to(device)
+    pos = torch.from_numpy(S[:, 1]).long().to(device)
+    neg = torch.from_numpy(S[:, 2]).long().to(device)
+
+    uids, pos, neg = shuffle(uids, pos, neg)
 
     epoch_loss, epoch_bpr_loss, epoch_reg_loss, epoch_cl_loss = 0, 0, 0, 0
+    num_batches = 0
 
-    for batch in train_loader:
-        uids, pos, neg = batch
-        uids = uids.long().to(device)
-        pos = pos.long().to(device)
-        neg = neg.long().to(device)
-
+    for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg, batch_size=dataset.batch_size):
+        num_batches += 1
         optimizer.zero_grad()
-        total_loss, bpr_loss, reg_loss, cl_loss = model(uids, pos, neg)
+        total_loss, bpr_loss, reg_loss, cl_loss = model(batch_uids, batch_pos, batch_neg)
         total_loss.backward()
         optimizer.step()
 
@@ -24,7 +26,6 @@ def train_model(model, optimizer, device, train_loader):
         epoch_reg_loss += reg_loss.item()
         epoch_cl_loss += cl_loss.item()
 
-    num_batches = len(train_loader)
     log_info = {
         "Total Loss": epoch_loss / num_batches,
         "BPR Loss": epoch_bpr_loss / num_batches,

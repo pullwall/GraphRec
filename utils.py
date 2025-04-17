@@ -12,6 +12,14 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
     torch.manual_seed(seed)
+    
+def set_device(gpu_id:int):
+    torch.cuda.set_device(gpu_id)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('Device:', device)
+    print('Current cuda device:', torch.cuda.current_device())
+    print('Count of using GPUs:', torch.cuda.device_count())
+    return device
 
 def sparse_dropout(mat, dropout):
     if dropout == 0.0:

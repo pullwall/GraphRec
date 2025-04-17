@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.base import BPR
+from models.BPR import BPR
 
 class LightGCN(BPR):
     def __init__(self, config, dataset):

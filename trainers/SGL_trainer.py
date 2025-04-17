@@ -1,28 +1,34 @@
 import torch
 import numpy as np
 import wandb
+from data import RecDataset, shuffle, minibatch
 from time import time
 
-# epoch 단위로 두번 증강
-def train_model(model, optimizer, device, train_loader):
-    train_loader.dataset.neg_sampling()
+def train_model(model, optimizer, device, dataset: RecDataset, epoch):
+    S = dataset.UniformSample_original_python()
+    uids = torch.Tensor(S[:, 0]).to(device)
+    pos = torch.Tensor(S[:, 1]).to(device)
+    neg = torch.Tensor(S[:, 2]).to(device)
 
-    sub_adj1 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
-    sub_norm_adj1 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj1).to(device)
-
-    sub_adj2 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
-    sub_norm_adj2 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj2).to(device)
+    # Shuffle & minibatch
+    uids, pos, neg = shuffle(uids, pos, neg)
 
     epoch_loss, epoch_bpr_loss, epoch_reg_loss, epoch_ssl_loss = 0, 0, 0, 0
+    num_batches = 0
 
-    for batch in train_loader:
-        uids, pos, neg = batch
-        uids = uids.long().to(device)
-        pos = pos.long().to(device)
-        neg = neg.long().to(device)
+    for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg, batch_size=dataset.batch_size):
+        # batch마다 augmentation
+        sub_adj1 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
+        sub_norm_adj1 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj1).to(device)
 
+        sub_adj2 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
+        sub_norm_adj2 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj2).to(device)
+        
+        num_batches += 1
         optimizer.zero_grad()
-        total_loss, bpr_loss, reg_loss, ssl_loss = model(uids, pos, neg, sub_norm_adj1, sub_norm_adj2)
+        total_loss, bpr_loss, reg_loss, ssl_loss = model(
+            batch_uids, batch_pos, batch_neg, sub_norm_adj1, sub_norm_adj2
+        )
         total_loss.backward()
         optimizer.step()
 
@@ -31,13 +37,13 @@ def train_model(model, optimizer, device, train_loader):
         epoch_reg_loss += reg_loss.cpu().item()
         epoch_ssl_loss += ssl_loss.cpu().item()
 
-    num_batches = len(train_loader)
     log_info = {
         "Total Loss": epoch_loss / num_batches,
         "BPR Loss": epoch_bpr_loss / num_batches,
         "Reg Loss": epoch_reg_loss / num_batches,
         "SSL Loss": epoch_ssl_loss / num_batches,
     }
+
     wandb.log({
         "Train/Total Loss": log_info["Total Loss"],
         "Train/BPR Loss": log_info["BPR Loss"],

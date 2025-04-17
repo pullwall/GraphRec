@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from scipy.sparse import coo_matrix, diags
+from config import config
 
 class RecDataset:
     def __init__(self, data_name):
@@ -15,7 +16,11 @@ class RecDataset:
         self.adj_matrix = self.create_adj_matrix()
         self.norm_adj_matrix = self.normalize_adj_matrix(self.adj_matrix)
         self.norm_adj_matrix = self.scipy_sparse_mat_to_torch_sparse_tensor(self.norm_adj_matrix)
-
+        self.trainDataSize = self.train.nnz
+        self.allPos = [[] for _ in range(self.num_users)]
+        for u, i in zip(self.train.row, self.train.col):
+            self.allPos[u].append(i)    
+    
     def load_data(self, data_name):
         path = './data/' + data_name + '/'
         def read_txt_to_coo(filename):
@@ -81,25 +86,58 @@ class RecDataset:
         shape = sparse_mx.shape
         sparse_tensor = torch.sparse_coo_tensor(indices, values, torch.Size(shape))
         return sparse_tensor.to(self.device)
-
-class BatchDataLoader(Dataset):
-    def __init__(self, coomat):
-        self.rows = coomat.row
-        self.cols = coomat.col
-        self.dokmat = coomat.todok()
-        self.negs = np.zeros(len(self.rows)).astype(np.int32)
-
-    def neg_sampling(self):
-        for i in range(len(self.rows)):
-            u = self.rows[i]
+    
+    def UniformSample_original_python(self):
+        """
+        the original impliment of BPR Sampling in LightGCN
+        :return:
+            np.array
+        """
+        user_num = self.trainDataSize
+        users = np.random.randint(0, self.num_users, user_num)
+        allPos = self.allPos
+        S = []
+        for i, user in enumerate(users):
+            posForUser = allPos[user]
+            if len(posForUser) == 0:
+                continue
+            posindex = np.random.randint(0, len(posForUser))
+            positem = posForUser[posindex]
             while True:
-                i_neg = np.random.randint(self.dokmat.shape[1])
-                if (u, i_neg) not in self.dokmat:
+                negitem = np.random.randint(0, self.num_items)
+                if negitem in posForUser:
+                    continue
+                else:
                     break
-            self.negs[i] = i_neg
+            S.append([user, positem, negitem])
+        return np.array(S)
 
-    def __len__(self):
-        return len(self.rows)
+def minibatch(*tensors, batch_size=config['batch_size']):
+    if len(tensors) == 1:
+        tensor = tensors[0]
+        for i in range(0, len(tensor), batch_size):
+            yield tensor[i:i + batch_size]
+    else:
+        for i in range(0, len(tensors[0]), batch_size):
+            yield tuple(x[i:i + batch_size] for x in tensors)
 
-    def __getitem__(self, idx):
-        return self.rows[idx], self.cols[idx], self.negs[idx]
+def shuffle(*arrays):
+
+    require_indices = False
+
+    if len(set(len(x) for x in arrays)) != 1:
+        raise ValueError('All inputs to shuffle must have '
+                        'the same length.')
+
+    shuffle_indices = np.arange(len(arrays[0]))
+    np.random.shuffle(shuffle_indices)
+
+    if len(arrays) == 1:
+        result = arrays[0][shuffle_indices]
+    else:
+        result = tuple(x[shuffle_indices] for x in arrays)
+
+    if require_indices:
+        return result, shuffle_indices
+    else:
+        return result

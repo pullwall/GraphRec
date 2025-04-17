@@ -51,7 +51,7 @@ def predict(user_emb, item_emb, uids_batch, train_csr, device):
     predictions = preds.argsort(descending=True, dim=1)
     return predictions.cpu().detach().numpy()
 
-def calculate_metrics(uids, predictions, top_k=20, test_labels=None):
+def calculate_metrics(uids, predictions, top_k, test_labels=None):
     user_num = 0
     all_recall = 0
     all_ndcg = 0
@@ -75,22 +75,37 @@ def calculate_metrics(uids, predictions, top_k=20, test_labels=None):
 
 def evaluate_metrics(model, device, dataset, config):
     batch_user = config['batch_user']
+    top_ks = config['top_k']
+    max_k = max(top_ks)
     uids_all = np.arange(dataset.num_users)
     n_batch_user = int(np.ceil(len(uids_all) / batch_user))
-    recall, ndcg = 0, 0
     train_csr = dataset.train.tocsr()
-    # 평가 시 full graph propagation (perturbation 없이)
+
+    recall_dict = {k: 0.0 for k in top_ks}
+    ndcg_dict = {k: 0.0 for k in top_ks}
+
     user_emb, item_emb = model.get_embeddings()
+
     for batch in range(n_batch_user):
         start = batch * batch_user
         end = min((batch + 1) * batch_user, len(uids_all))
         uids_batch = torch.LongTensor(uids_all[start:end]).to(device)
+
+        # 예측: 전체 아이템 중 상위 max_k개만
         predictions = predict(user_emb, item_emb, uids_batch, train_csr, device)
-        recall_batch, ndcg_batch = calculate_metrics(uids_batch, predictions, top_k=20, test_labels=dataset.test_labels)
-        recall += recall_batch
-        ndcg += ndcg_batch
+        predictions = predictions[:, :max_k]
+
+        for k in top_ks:
+            sliced_preds = predictions[:, :k]
+            r, n = calculate_metrics(
+                uids_batch.cpu().numpy(), sliced_preds, top_k=k, test_labels=dataset.test_labels
+            )
+            recall_dict[k] += r
+            ndcg_dict[k] += n
+
     log_info = {
-        "Recall@20": np.round(recall / n_batch_user, 4),
-        "NDCG@20": np.round(ndcg / n_batch_user, 4)
+        **{f"Recall@{k}": np.round(recall_dict[k] / n_batch_user, 4) for k in top_ks},
+        **{f"NDCG@{k}": np.round(ndcg_dict[k] / n_batch_user, 4) for k in top_ks},
     }
+
     return log_info

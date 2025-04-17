@@ -53,7 +53,7 @@ def predict(user_emb, item_emb, uids_batch, train_csr, device):
     preds = preds * (1 - mask) - 1e8 * mask
     return preds.argsort(descending=True, dim=1).cpu().numpy()
 
-def calculate_metrics(uids, predictions, top_k=20, test_labels=None):
+def calculate_metrics(uids, predictions, top_k, test_labels=None):
     all_recall, all_ndcg, user_num = 0, 0, 0
     for i in range(len(uids)):
         uid = uids[i]
@@ -68,12 +68,20 @@ def calculate_metrics(uids, predictions, top_k=20, test_labels=None):
             user_num += 1
     return all_recall / user_num, all_ndcg / user_num
 
+
 def evaluate_metrics(model, device, dataset, config):
     batch_user = config['batch_user']
+    top_ks = config['top_k']
+    max_k = max(top_ks)
+
     uids_all = np.arange(dataset.num_users)
     n_batch = int(np.ceil(len(uids_all) / batch_user))
-    recall, ndcg = 0, 0
+
+    recall_dict = {k: 0 for k in top_ks}
+    ndcg_dict = {k: 0 for k in top_ks}
+
     train_csr = dataset.train.tocsr()
+
     with torch.no_grad():
         embs = model.get_embeddings()
         user_emb = embs['fused'][:dataset.num_users]
@@ -82,11 +90,20 @@ def evaluate_metrics(model, device, dataset, config):
         for b in range(n_batch):
             start, end = b * batch_user, min((b + 1) * batch_user, len(uids_all))
             uids_batch = torch.LongTensor(uids_all[start:end]).to(device)
+
+            # 한 번만 prediction (top max_k까지)
             preds = predict(user_emb, item_emb, uids_batch, train_csr, device)
-            r, n = calculate_metrics(uids_batch.cpu().numpy(), preds, 20, dataset.test_labels)
-            recall += r
-            ndcg += n
-    return {
-        "Recall@20": round(recall / n_batch, 4),
-        "NDCG@20": round(ndcg / n_batch, 4)
+            preds = preds[:, :max_k]
+
+            for k in top_ks:
+                sliced_preds = preds[:, :k]
+                r, n = calculate_metrics(uids_batch.cpu().numpy(), sliced_preds, k, dataset.test_labels)
+                recall_dict[k] += r
+                ndcg_dict[k] += n
+
+    log_info = {
+        **{f"Recall@{k}": round(recall_dict[k] / n_batch, 4) for k in top_ks},
+        **{f"NDCG@{k}": round(ndcg_dict[k] / n_batch, 4) for k in top_ks}
     }
+
+    return log_info

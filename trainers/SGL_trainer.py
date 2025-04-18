@@ -15,7 +15,7 @@ def train_model(model, optimizer, device, dataset: RecDataset, epoch):
     epoch_loss, epoch_bpr_loss, epoch_reg_loss, epoch_ssl_loss = 0, 0, 0, 0
     num_batches = 0
 
-    for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg, batch_size=dataset.batch_size):
+    for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg):
         # batch마다 augmentation
         sub_adj1 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
         sub_norm_adj1 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj1).to(device)

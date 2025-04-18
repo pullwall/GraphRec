@@ -4,12 +4,10 @@ from tqdm import tqdm
 import importlib
 import wandb
 from config import get_config
-from utils import set_seed
+from utils import set_seed, set_device
 from data import RecDataset
 import time
 
-
-torch.cuda.set_device(1)
 
 def get_model(model_name, config, dataset):
     try:
@@ -35,6 +33,7 @@ def get_trainer(model_name):
 def main():
     config = get_config()
     set_seed(config['seed'])
+    set_device(0)
 
     wandb.init(
         project=f"{config['model']}",
@@ -66,7 +65,7 @@ def main():
         print(f"Train took {train_end-train_start:.2f} seconds")
         
 
-        if epoch % 1 == 0:
+        if epoch % 5 == 0:
             eval_start = time.time()
             eval_log_info = evaluate_metrics(model, device, dataset, config)
             eval_end = time.time()
@@ -108,5 +107,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
-

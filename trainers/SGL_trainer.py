@@ -5,9 +5,9 @@ from data import RecDataset, shuffle, minibatch
 
 def train_model(model, optimizer, device, dataset: RecDataset, epoch):
     S = dataset.UniformSample_original_python()
-    uids = torch.Tensor(S[:, 0]).to(device)
-    pos = torch.Tensor(S[:, 1]).to(device)
-    neg = torch.Tensor(S[:, 2]).to(device)
+    uids = torch.LongTensor(S[:, 0]).to(device)
+    pos = torch.LongTensor(S[:, 1]).to(device)
+    neg = torch.LongTensor(S[:, 2]).to(device)
 
     # Shuffle & minibatch
     uids, pos, neg = shuffle(uids, pos, neg)

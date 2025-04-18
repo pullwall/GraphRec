@@ -14,7 +14,7 @@ def train_model(model, optimizer, device, dataset:RecDataset, epoch):
     num_batches = 0
     epoch_loss, epoch_bpr_loss, epoch_reg_loss, epoch_ssl_loss = 0, 0, 0, 0
 
-    for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg, batch_size=dataset.batch_size):
+    for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg):
         num_batches += 1
         optimizer.zero_grad()
         total_loss, bpr_loss, reg_loss, ssl_loss = model(batch_uids, batch_pos, batch_neg)

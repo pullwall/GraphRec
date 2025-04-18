@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import wandb
 from data import RecDataset, shuffle, minibatch
-from time import time
 
 def train_model(model, optimizer, device, dataset: RecDataset, epoch):
     S = dataset.UniformSample_original_python()

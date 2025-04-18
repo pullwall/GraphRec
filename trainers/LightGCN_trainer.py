@@ -1,14 +1,11 @@
 import torch
 import numpy as np
 import wandb
-import time
 from data import RecDataset, shuffle, minibatch
 
 
 def train_model(model, optimizer, device, dataset:RecDataset, epoch):
-    start = time.time()
     S = dataset.UniformSample_original_python()
-    print(f"Neg sampling took {time.time() - start:.2f} seconds")
     uids = torch.Tensor(S[:, 0]).long().to(device)
     pos = torch.Tensor(S[:, 1]).long().to(device)
     neg = torch.Tensor(S[:, 2]).long().to(device)

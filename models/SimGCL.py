@@ -78,9 +78,6 @@ class SimGCL(BPR):
         perturbed_user_emb2 = F.normalize(perturbed_user_emb2, dim=1)
         perturbed_item_emb2 = F.normalize(perturbed_item_emb2, dim=1)
         
-        uids = torch.unique(uids)
-        pos = torch.unique(pos)
-        
         # 사용자에 대한 contrastive loss
         u_emb1_batch = perturbed_user_emb1[uids]  # (batch_size x dim)
         u_emb2_batch = perturbed_user_emb2[uids]

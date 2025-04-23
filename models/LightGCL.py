@@ -33,6 +33,11 @@ class LightGCL(BPR):
         neg_scores = torch.sum(u_emb * neg_emb, dim=1)
         loss = -torch.log(torch.sigmoid(pos_scores - neg_scores)).mean()
         return loss
+    
+    def reg_loss(self):
+        l2_reg = sum(param.norm(2).pow(2) for param in self.parameters())
+        return self.lambda_2 * l2_reg
+
 
     def get_embeddings(self):
         # 기본 LightGCN propagation (supervised branch)
@@ -120,7 +125,7 @@ class LightGCL(BPR):
         # 1. BPR용 임베딩 (dropout X)
         user_emb, item_emb = self.get_embeddings()
         loss_bpr = self.bpr_loss(user_emb, item_emb, uids, pos, neg)
-        loss_reg = self.reg_loss(uids, pos, neg)
+        loss_reg = self.reg_loss()
 
         # 2. Contrastive용 임베딩 (dropout + SVD 포함)
         E_u, E_i, G_u, G_i = self.get_embeddings_svd()

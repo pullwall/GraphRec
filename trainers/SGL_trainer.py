@@ -2,27 +2,28 @@ import torch
 import numpy as np
 import wandb
 from data import RecDataset, shuffle, minibatch
+from time import time
 
 def train_model(model, optimizer, device, dataset: RecDataset, epoch):
     S = dataset.UniformSample_original_python()
-    uids = torch.LongTensor(S[:, 0]).to(device)
-    pos = torch.LongTensor(S[:, 1]).to(device)
-    neg = torch.LongTensor(S[:, 2]).to(device)
+    uids = torch.Tensor(S[:, 0]).long().to(device)
+    pos = torch.Tensor(S[:, 1]).long().to(device)
+    neg = torch.Tensor(S[:, 2]).long().to(device)
 
     # Shuffle & minibatch
     uids, pos, neg = shuffle(uids, pos, neg)
 
     epoch_loss, epoch_bpr_loss, epoch_reg_loss, epoch_ssl_loss = 0, 0, 0, 0
     num_batches = 0
+    
+    # epoch마다 augmentation -> 논문 방법
+    sub_adj1 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
+    sub_norm_adj1 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj1).to(device)
+
+    sub_adj2 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
+    sub_norm_adj2 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj2).to(device)
 
     for batch_uids, batch_pos, batch_neg in minibatch(uids, pos, neg):
-        # batch마다 augmentation
-        sub_adj1 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
-        sub_norm_adj1 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj1).to(device)
-
-        sub_adj2 = model.create_adj_mat(is_subgraph=True, aug_type=model.ssl_aug_type)
-        sub_norm_adj2 = model.dataset.scipy_sparse_mat_to_torch_sparse_tensor(sub_adj2).to(device)
-        
         num_batches += 1
         optimizer.zero_grad()
         total_loss, bpr_loss, reg_loss, ssl_loss = model(
